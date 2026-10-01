@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Бомба ойыны</title>
+<style>
+:root{--bg:#fff3e0;--fg:#2b1d3a;--card:#fff;--ac:#e8453c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1428;--fg:#f6ecff;--card:#2a1e3b}}
+:root[data-theme="dark"]{--bg:#1c1428;--fg:#f6ecff;--card:#2a1e3b}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:center;padding:14px;transition:background .15s;display:flex;flex-direction:column;align-items:center}
+body.boom{background:#ff3b1f;color:#fff}
+h1{margin:4px 0;font-size:clamp(1.4rem,4vw,2.4rem)}
+#topics{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:900px;margin:8px 0}
+.tp{font:inherit;font-weight:700;border:3px solid transparent;background:var(--card);color:var(--fg);border-radius:14px;padding:10px 16px;font-size:clamp(1rem,2.6vw,1.5rem);cursor:pointer}
+.tp.on{border-color:var(--ac);background:var(--ac);color:#fff}
+#cur{font-size:clamp(1.8rem,6vw,3.6rem);font-weight:800;margin:6px 0;min-height:1.3em}
+#bomb{font-size:clamp(7rem,24vw,15rem);line-height:1;user-select:none;transition:transform .1s}
+#bomb.t{animation:sh .35s infinite}
+@keyframes sh{0%,100%{transform:rotate(-4deg) scale(1)}50%{transform:rotate(4deg) scale(1.07)}}
+#msg{font-size:clamp(1.3rem,4vw,2.6rem);font-weight:800;min-height:1.4em;margin:4px 0}
+button.b{font:inherit;font-weight:800;border:0;border-radius:999px;padding:16px 44px;margin:6px;background:var(--ac);color:#fff;cursor:pointer;font-size:clamp(1.2rem,3.5vw,2rem)}
+button.w{background:#fff;color:var(--ac)}
+#cnt{opacity:.7;font-size:1.1rem}
+</style>
+</head>
+<body>
+<h1>💣 Бомба ойыны</h1>
+<div id="topics"></div>
+<div id="cur"></div>
+<div id="bomb">💣</div>
+<div id="msg">Тақырып таңдаңдар!</div>
+<div>
+  <button class="b" id="rand">🎲 Кездейсоқ тақырып</button>
+  <button class="b" id="start">▶ Бастау</button>
+  <button class="b w" id="pass" style="display:none">Бомбаны бер ➡️</button>
+</div>
+<div id="cnt"></div>
+<script>
+const TOPICS=["🐾 Жануарлар","🏙 Қазақстан қалалары","🍎 Жемістер","🥕 Көкөністер","🎨 Түстер","✏️ Мектеп заттары","🍲 Тағамдар","👕 Киім","🐦 Құстар","🚗 Көлік түрлері","👩‍🏫 Мамандықтар","🧸 Ойыншықтар"];
+let topic=null,run=false,passes=0,ac=null,endT=0,t0=0,nextTick=0,raf=0;
+const $=id=>document.getElementById(id),bomb=$("bomb");
+function rnd(n){const a=new Uint32Array(1),l=Math.floor(4294967296/n)*n;do{crypto.getRandomValues(a)}while(a[0]>=l);return a[0]%n}
+function setTopic(i){
+  if(run)return;topic=i;$("cur").textContent=TOPICS[i];
+  document.querySelectorAll(".tp").forEach((b,j)=>b.classList.toggle("on",j===i));
+  $("msg").textContent="Дайын болыңдар!";
+}
+TOPICS.forEach((t,i)=>{const b=document.createElement("button");b.className="tp";b.textContent=t;b.onclick=()=>setTopic(i);$("topics").appendChild(b)});
+$("rand").onclick=()=>setTopic(rnd(TOPICS.length));
+function beep(f,d,v){
+  if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();
+  o.frequency.value=f;o.type="square";g.gain.value=v;
+  g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);
+  o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d);
+}
+function boom(){
+  run=false;cancelAnimationFrame(raf);bomb.classList.remove("t");
+  bomb.textContent="💥";document.body.classList.add("boom");
+  $("msg").textContent="ЖАРЫЛДЫ! Бомба кімде болса, сол шығады!";
+  if(ac){const n=ac.sampleRate*0.8,buf=ac.createBuffer(1,n,ac.sampleRate),d=buf.getChannelData(0);
+    for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+    const s=ac.createBufferSource(),g=ac.createGain();g.gain.value=0.8;s.buffer=buf;s.connect(g);g.connect(ac.destination);s.start()}
+  $("pass").style.display="none";$("start").style.display="";$("start").textContent="🔄 Жаңа раунд";$("rand").style.display="";
+  $("cnt").textContent="Берілген рет: "+passes;
+  setTimeout(()=>document.body.classList.remove("boom"),700);
+}
+function loop(now){
+  if(!run)return;
+  if(now>=endT)return boom();
+  if(now>=nextTick){
+    const left=(endT-now)/(endT-t0); // 1 -> 0
+    beep(left<0.25?1100:800,0.08,0.25);
+    // случайный темп: чем ближе конец, тем быстрее, но с разбросом
+    nextTick=now+(250+left*600)*(0.5+Math.random()*1.0);
+  }
+  raf=requestAnimationFrame(loop);
+}
+$("start").onclick=()=>{
+  if(topic===null)setTopic(rnd(TOPICS.length));
+  ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();
+  passes=0;run=true;bomb.textContent="💣";bomb.classList.add("t");
+  $("msg").textContent="Сөз айтып, бомбаны бер!";$("cnt").textContent="";
+  $("start").style.display="none";$("rand").style.display="none";$("pass").style.display="";
+  t0=performance.now();endT=t0+(15+rnd(31))*1000; // 15–45 секунд, случайно
+  nextTick=t0;raf=requestAnimationFrame(loop);
+};
+$("pass").onclick=()=>{passes++;beep(1400,0.06,0.2);$("cnt").textContent="Берілді: "+passes;
+  bomb.style.transform="scale(1.2)";setTimeout(()=>bomb.style.transform="",120)};
+</script>
+</body>
+</html>
